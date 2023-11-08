@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeCraft</title>
+  <script src="../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>CodeCraft</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<p>A 2D version of MineCraft inspired by
+<a href="https://projects.raspberrypi.org/en/projects/codecraft">CodeCraft</a>.</p>
+
+<p>Use the arrow keys or WASD to move.
+<br>Use SPACE to pick up tiles.
+<br>Use the number keys to place the corresponding tile.
+<br>Use the letter key indicated to craft a specific tile.</p>
+
+</main>
+
+<script>
+/*
+ * An enumeration of tile types.
+ */
+const TILE = Object.freeze({
+  DIRT: 0,
+  GRASS: 1,
+  WATER: 2,
+  BRICK: 3,
+  WOOD: 4,
+  SAND: 5,
+  PLANK: 6,
+  GLASS: 7
+});
+
+/*
+ * Map each tile to its color.
+ */
+const TILE_MAP = new Map([
+  [TILE.DIRT, 'brown'],
+  [TILE.GRASS, 'green'],
+  [TILE.WATER, 'blue'],
+  [TILE.BRICK, 'red'],
+  [TILE.WOOD, 'brown'],
+  [TILE.SAND, 'yellow'],
+  [TILE.PLANK, 'brown'],
+  [TILE.GLASS, 'gray']
+]);
+
+/*
+ * Positive integer maximum number of tiles the player can have.
+ */
+const MAX_TILE_COUNT = 40;
+
+/*
+ * Positive integer width of the world in number of tiles.
+ */
+const MAP_WIDTH = 20;
+
+/*
+ * Positive integer height of the world in number of tiles.
+ */
+const MAP_HEIGHT = 15;
+
+/*
+ * Positive integer width and height of each tile in pixels.
+ */
+const TILE_SIZE = 20;
+
+WIDTH = (MAP_WIDTH * TILE_SIZE) + 300;
+HEIGHT = (MAP_HEIGHT + 5) * TILE_SIZE;
+
+/*
+ * Return a random integer N such that min <= N < max.
+ */
+function getRandomInteger(min, max) {
+  min = Math.ceil(min);
+  max = Math.floor(max);
+  return Math.floor((Math.random() * (max - min)) + min);
+}
+
+/*
+ * Class containing the location of every tile in the world.
+ */
+class WorldMap {
+  constructor(width, height) {
+    if (typeof width !== 'number') {
+      throw new TypeError('width must be a positive number.');
+    }
+    if (typeof height !== 'number') {
+      throw new TypeError('height must be a positive number.');
+    }
+    if (width <= 0) {
+      throw new RangeError('width must be a positive number.');
+    }
+    if (height <= 0) {
+      throw new RangeError('height must be a positive number.');
+    }
+
+    this.width = width;
+    this.height = height;
+    this.array = new Uint8ClampedArray(this.width * this.height);
+    this.array.fill(TILE.DIRT);
+  }
+
+  /*
+   * Return the index for coordinates (x, y).
+   */
+  _coordinatesToIndex(x, y) {
+    return x + (y * this.width);
+  }
+
+  /*
+   * Return the tile at coordinates (x, y) or fallback.
+   */
+  getTile(x = 0, y = 0, fallback = TILE.DIRT) {
+    if (typeof x !== 'number') {
+      throw new TypeError('x must be a number.');
+    }
+    if (typeof y !== 'number') {
+      throw new TypeError('y must be a number.');
+    }
+
+    if (x < 0) {
+      return fallback;
+    }
+    if (y < 0) {
+      return fallback;
+    }
+    if (this.width <= x) {
+      return fallback;
+    }
+    if (this.height <= y) {
+      return fallback;
+    }
+    return this.array[this._coordinatesToIndex(x, y)];
+  }
+
+  /*
+   * Set the tile at coordinates (x, y) to value.
+   */
+  setTile(x, y, value) {
+    if (typeof x !== 'number') {
+      throw new TypeError('x must be a number.');
+    }
+    if (typeof y !== 'number') {
+      throw new TypeError('y must be a number.');
+    }
+    if (typeof value !== 'number') {
+      throw new TypeError('value must be a number.');
+    }
+
+    if (x < 0) {
+      return;
+    }
+    if (y < 0) {
+      return;
+    }
+    if (this.width <= x) {
+      return;
+    }
+    if (this.height <= y) {
+      return;
+    }
+    this.array[this._coordinatesToIndex(x, y)] = value;
+  }
+
+
+  /*
+   * Return a new width x height WorldMap instance with random tiles.
+   */
+  static generate(width = MAP_WIDTH, height = MAP_HEIGHT) {
+    let world = new WorldMap(width, height),
+        roll;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        roll = getRandomInteger(0, 11);
+        if ((1 <= roll) && (roll <= 2)) {
+          world.setTile(x, y, TILE.WATER);
+        }
+        else if (roll <= 4) {
+          world.setTile(x, y, TILE.GRASS);
+        }
+        else if (roll <= 5) {
+          world.setTile(x, y, TILE.WOOD);
+        }
+        else if (roll <= 6) {
+          world.setTile(x, y, TILE.SAND);
+        }
+      }
+    }
+
+    return world;
+  }
+
+  /*
+   * A short test suite to confirm the WorldMap class works.
+   */
+  static test() {
+    for (let [k, v] of TILE_MAP) {
+      console.assert(0 <= k,
+                     {msg: 'TILE_MAP is incorrect.'});
+      console.assert(k <= 255,
+                     {msg: 'TILE_MAP is incorrect.'});
+      console.assert(TILE_MAP.get(k) === v,
+                     {msg: 'TILE_MAP is incorrect.'});
+    }
+
+    let world = new WorldMap(2, 3);
+    console.assert(world.width === 2,
+                   {msg: 'WorldMap.width is incorrect.'});
+    console.assert(world.height === 3,
+                   {msg: 'WorldMap.height is incorrect.'});
+    console.assert(world.array.every((v) => (v === TILE.DIRT)),
+                   {msg: 'WorldMap.array is incorrect.'});
+    console.assert(world.getTile() === TILE.DIRT,
+                   {msg: 'WorldMap.getTile() failed.'});
+    console.assert(world.getTile(1) === TILE.DIRT,
+                   {msg: 'WorldMap.getTile() failed.'});
+    console.assert(world.getTile(1, 2) === TILE.DIRT,
+                   {msg: 'WorldMap.getTile() failed.'});
+    console.assert(world.getTile(1, 2, 3) === TILE.DIRT,
+                   {msg: 'WorldMap.getTile() failed.'});
+    console.assert(world.getTile(0, 2) === TILE.DIRT,
+                   {msg: 'WorldMap.getTile() failed.'});
+    world.setTile(0, 2, TILE.WATER);
+    console.assert(world.getTile(0, 2) === TILE.WATER,
+                   {msg: 'WorldMap.getTile() failed.'});
+
+    world = WorldMap.generate();
+    console.assert(world.width === MAP_WIDTH,
+                   {msg: 'WorldMap.width is incorrect.'});
+    console.assert(world.height === MAP_HEIGHT,
+                   {msg: 'WorldMap.height is incorrect.'});
+    console.assert(world.array.every((v) => (v >= TILE.DIRT)),
+                   {msg: 'WorldMap.array is incorrect.'});
+    world.setTile(0, 2, TILE.WATER);
+    console.assert(world.getTile(0, 2) === TILE.WATER,
+                   {msg: 'WorldMap.setTile() failed.'});
+  }
+}
+WorldMap.test();
+</script>
+</body>
+
+</html>
