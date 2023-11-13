@@ -265,6 +265,277 @@ class WorldMap {
   }
 }
 WorldMap.test();
+
+let world, player;
+
+function reset() {
+  world = WorldMap.generate();
+  player = {
+    x: Math.floor(MAP_WIDTH / 2),
+    y: Math.floor(MAP_HEIGHT / 2),
+    inventory:  new Map([
+      [TILE.DIRT, 10],
+      [TILE.GRASS, 10],
+      [TILE.WATER, 10],
+      [TILE.BRICK, 0],
+      [TILE.WOOD, 5],
+      [TILE.SAND, 5],
+      [TILE.PLANK, 0],
+      [TILE.GLASS, 0]
+    ])
+  };
+}
+
+/*
+ * Draw the tile indicated by tile in rect.
+ */
+function drawTile(rect, tile) {
+  screen.draw.filled_rect(rect, TILE_MAP.get(tile));
+
+  if (tile === TILE.WOOD) {
+    screen.draw.circle(rect.center, 2, 'black', 1);
+    screen.draw.circle(rect.center, Math.floor(TILE_SIZE / 4), 'black', 1);
+    screen.draw.circle(rect.center, Math.floor(TILE_SIZE / 2), 'black', 1);
+  }
+  else if (tile === TILE.PLANK) {
+    screen.draw.line(rect.midleft, rect.midright, 'black', 2);
+    screen.draw.line(rect.midtop, rect.midbottom, 'black', 2);
+  }
+  else if (tile === TILE.GLASS) {
+    screen.draw.line(rect.midleft, rect.midtop, 'white', 4);
+    screen.draw.line(rect.bottomleft, rect.topright, 'white', 4);
+  }
+}
+
+function draw() {
+  screen.fill('white');
+  for (let y = 0; y < world.height; y++) {
+    for (let x = 0; x < world.width; x++) {
+      drawTile(new Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE), world.getTile(x, y));
+    }
+  }
+
+  let radius = Math.floor(TILE_SIZE / 2),
+      x = (MAP_WIDTH + 1) * TILE_SIZE,
+      y = TILE_SIZE,
+      tiles = Array.from(TILE_MAP.keys()),
+      i = 1;
+
+  screen.draw.filled_circle([(player.x * TILE_SIZE) + radius, (player.y * TILE_SIZE) + radius], radius, 'white');
+  screen.draw.circle([(player.x * TILE_SIZE) + radius, (player.y * TILE_SIZE) + radius], radius, 'black', 2);
+
+  // Crafting rules
+  screen.draw.text('Crafting rules', {
+    topleft: [x, y],
+    color: 'black',
+    fontsize: TILE_SIZE
+  });
+
+  y += (TILE_SIZE * 2);
+  drawTile(new Rect(x, y, TILE_SIZE, TILE_SIZE), TILE.BRICK);
+  screen.draw.text(' = 2 ', {
+    topleft: [x + TILE_SIZE, y],
+    color: 'black',
+    fontsize: TILE_SIZE
+  });
+  drawTile(new Rect(x + (TILE_SIZE * 4), y, TILE_SIZE, TILE_SIZE), TILE.DIRT);
+  screen.draw.text(' 1 ', {
+    topleft: [x + (TILE_SIZE * 5), y],
+    color: 'black',
+    fontsize: TILE_SIZE
+  });
+  drawTile(new Rect(x + (TILE_SIZE * 6), y, TILE_SIZE, TILE_SIZE), TILE.WATER);
+
+  y += (TILE_SIZE * 2);
+  drawTile(new Rect(x, y, TILE_SIZE, TILE_SIZE), TILE.PLANK);
+  screen.draw.text(' = 3 ', {
+    topleft: [x + TILE_SIZE, y],
+    color: 'black',
+    fontsize: TILE_SIZE
+  });
+  drawTile(new Rect(x + (TILE_SIZE * 4), y, TILE_SIZE, TILE_SIZE), TILE.WOOD);
+
+  y += (TILE_SIZE * 2);
+  drawTile(new Rect(x, y, TILE_SIZE, TILE_SIZE), TILE.GLASS);
+  screen.draw.text(' = 3 ', {
+    topleft: [x + TILE_SIZE, y],
+    color: 'black',
+    fontsize: TILE_SIZE
+  });
+  drawTile(new Rect(x + (TILE_SIZE * 4), y, TILE_SIZE, TILE_SIZE), TILE.SAND);
+
+  // Inventory
+  y = (MAP_HEIGHT + 1) * TILE_SIZE;
+  x = TILE_SIZE;
+  for (let line of ['Tile', 'Count', 'Place', 'Craft']) {
+    screen.draw.text(line, {
+      topleft: [x, y],
+      color: 'black',
+      fontsize: TILE_SIZE
+    });
+    y += TILE_SIZE;
+  }
+
+  y = (MAP_HEIGHT + 1) * TILE_SIZE;
+  x = TILE_SIZE * 5;
+  for (let tile of tiles) {
+    drawTile(new Rect(x, y, TILE_SIZE, TILE_SIZE), tile);
+    screen.draw.text(player.inventory.get(tile).toFixed(), {
+      topleft: [x, y + TILE_SIZE],
+      color: 'black',
+      fontsize: TILE_SIZE
+    });
+    screen.draw.text(i.toFixed(), {
+      topleft: [x, y + (TILE_SIZE * 2)],
+      color: 'black',
+      fontsize: TILE_SIZE
+    });
+    if (tile === TILE.BRICK) {
+      screen.draw.text('R', {
+        topleft: [x, y + (TILE_SIZE * 3)],
+        color: 'black',
+        fontsize: TILE_SIZE
+      });
+    }
+    else if (tile === TILE.PLANK) {
+      screen.draw.text('U', {
+        topleft: [x, y + (TILE_SIZE * 3)],
+        color: 'black',
+        fontsize: TILE_SIZE
+      });
+    }
+    else if (tile === TILE.GLASS) {
+      screen.draw.text('I', {
+        topleft: [x, y + (TILE_SIZE * 3)],
+        color: 'black',
+        fontsize: TILE_SIZE
+      });
+    }
+
+    x += TILE_SIZE * 2;
+    i++;
+  }
+}
+
+/*
+ * Place the tile tileToPlace in the world if the player is over TILE.DIRT and has the tile in his inventory.
+ */
+function place(tileToPlace) {
+  let tile = world.getTile(player.x, player.y),
+      count = player.inventory.get(tileToPlace);
+  if ((tile === TILE.DIRT) && (count > 0)) {
+    world.setTile(player.x, player.y, tileToPlace);
+    player.inventory.set(tileToPlace, count - 1);
+  }
+}
+
+/*
+ * Craft the tile tileToCraft if the player has room in his inventory.
+ */
+function craft(tileToCraft) {
+  let count = player.inventory.get(tileToCraft);
+  if (count >= MAX_TILE_COUNT) {
+    // Player cannot have any more of the resulting tile
+    return;
+  }
+
+  if (tileToCraft === TILE.BRICK) {
+    let dirtCount = player.inventory.get(TILE.DIRT),
+        waterCount = player.inventory.get(TILE.WATER);
+    if ((dirtCount >= 2) && (waterCount >= 1)) {
+      player.inventory.set(TILE.DIRT, dirtCount - 2);
+      player.inventory.set(TILE.WATER, waterCount - 1);
+      player.inventory.set(tileToCraft, count + 1);
+    }
+  }
+  else if (tileToCraft === TILE.PLANK) {
+    let woodCount = player.inventory.get(TILE.WOOD);
+    if (woodCount >= 3) {
+      player.inventory.set(TILE.WOOD, woodCount - 3);
+      player.inventory.set(tileToCraft, count + 1);
+    }
+  }
+  else if (tileToCraft === TILE.GLASS) {
+    let sandCount = player.inventory.get(TILE.SAND);
+    if (sandCount >= 3) {
+      player.inventory.set(TILE.SAND, sandCount - 3);
+      player.inventory.set(tileToCraft, count + 1);
+    }
+  }
+}
+
+function on_key_down(key) {
+  if ((key === keys.UP) || (key === keys.W)) {
+    if (player.y > 0) {
+      player.y--;
+    }
+  }
+  if ((key === keys.LEFT) || (key === keys.A)) {
+    if (player.x > 0) {
+      player.x--;
+    }
+  }
+  if ((key === keys.DOWN) || (key === keys.S)) {
+    if (player.y < (world.height - 1)) {
+      player.y++;
+    }
+  }
+  if ((key === keys.RIGHT) || (key === keys.D)) {
+    if (player.x < (world.width - 1)) {
+      player.x++;
+    }
+  }
+
+  if (key === keys.SPACE) {
+    // Pick up the tile over which the player is standing
+    let tile = world.getTile(player.x, player.y),
+        count = player.inventory.get(tile);
+    if (count < MAX_TILE_COUNT) {
+      world.setTile(player.x, player.y, TILE.DIRT);
+      player.inventory.set(tile, count + 1);
+    }
+  }
+
+  let tiles = Array.from(TILE_MAP.keys());
+  if (key === keys.K_1) {
+    place(tiles[0]);
+  }
+  if (key === keys.K_2) {
+    place(tiles[1]);
+  }
+  if (key === keys.K_3) {
+    place(tiles[2]);
+  }
+  if (key === keys.K_4) {
+    place(tiles[3]);
+  }
+  if (key === keys.K_5) {
+    place(tiles[4]);
+  }
+  if (key === keys.K_6) {
+    place(tiles[5]);
+  }
+  if (key === keys.K_7) {
+    place(tiles[6]);
+  }
+  if (key === keys.K_8) {
+    place(tiles[7]);
+  }
+
+  if (key === keys.R) {
+    craft(TILE.BRICK);
+  }
+  if (key === keys.U) {
+    craft(TILE.PLANK);
+  }
+  if (key === keys.I) {
+    craft(TILE.GLASS);
+  }
+}
+
+window.addEventListener('load', (event) => {
+  screen.init();
+});
 </script>
 </body>
 
